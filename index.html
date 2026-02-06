@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>HyreNet BugAThon — Live Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2236;
+    --border: #2a3550;
+    --text: #e2e8f0;
+    --text-muted: #64748b;
+    --accent: #00d4ff;
+    --accent2: #a78bfa;
+    --critical: #ef4444;
+    --high: #f97316;
+    --medium: #eab308;
+    --low: #22c55e;
+    --pass: #22c55e;
+    --fail: #ef4444;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── ANIMATED BG ─── */
+  .bg-grid {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    animation: gridShift 20s linear infinite;
+  }
+  @keyframes gridShift { to { background-position: 60px 60px; } }
+
+  .glow-orb {
+    position: fixed; border-radius: 50%; filter: blur(120px); opacity: 0.15; z-index: 0;
+    animation: orbFloat 8s ease-in-out infinite alternate;
+  }
+  .glow-orb.one { width: 400px; height: 400px; background: var(--accent); top: -100px; left: -100px; }
+  .glow-orb.two { width: 300px; height: 300px; background: var(--accent2); bottom: -80px; right: -80px; animation-delay: -3s; }
+  @keyframes orbFloat { from { transform: translate(0,0) scale(1); } to { transform: translate(40px,30px) scale(1.15); } }
+
+  /* ─── LAYOUT ─── */
+  .container { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 0 24px 60px; }
+
+  /* ─── HEADER ─── */
+  .header {
+    text-align: center; padding: 70px 0 40px; position: relative;
+  }
+  .header-badge {
+    display: inline-block; background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.3);
+    color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    padding: 6px 16px; border-radius: 20px; letter-spacing: 2px; text-transform: uppercase;
+    margin-bottom: 18px; animation: fadeIn 0.6s ease;
+  }
+  .header h1 {
+    font-size: clamp(32px, 5vw, 56px); font-weight: 800; letter-spacing: -1.5px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2), var(--accent));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; animation: fadeUp 0.6s ease 0.1s both;
+  }
+  .header p {
+    color: var(--text-muted); font-size: 15px; margin-top: 10px;
+    animation: fadeUp 0.6s ease 0.2s both; max-width: 600px; margin-left: auto; margin-right: auto;
+  }
+
+  /* ─── SUMMARY CARDS ─── */
+  .summary-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px; margin-bottom: 40px;
+  }
+  .summary-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 24px 20px; text-align: center;
+    transition: transform 0.3s, border-color 0.3s; animation: fadeUp 0.5s ease both;
+  }
+  .summary-card:hover { transform: translateY(-3px); border-color: var(--accent); }
+  .summary-card .num {
+    font-size: 36px; font-weight: 800; font-family: 'JetBrains Mono', monospace;
+  }
+  .summary-card .label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+  .num.total { color: var(--accent); }
+  .num.critical { color: var(--critical); }
+  .num.high { color: var(--high); }
+  .num.medium { color: var(--medium); }
+  .num.low { color: var(--low); }
+  .num.scenarios { color: var(--accent2); }
+  .num.testcases { color: #60a5fa; }
+  .num.pass-rate { color: var(--pass); }
+
+  /* ─── SECTION TITLES ─── */
+  .section-title {
+    font-size: 20px; font-weight: 700; margin-bottom: 18px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-title .icon { font-size: 22px; }
+  .section-title .tag {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 400;
+    background: rgba(0,212,255,0.1); color: var(--accent); padding: 3px 10px;
+    border-radius: 10px; border: 1px solid rgba(0,212,255,0.2);
+  }
+
+  /* ─── TABS ─── */
+  .tabs {
+    display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap;
+  }
+  .tab-btn {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text-muted);
+    font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600;
+    padding: 8px 18px; border-radius: 24px; cursor: pointer;
+    transition: all 0.25s; user-select: none;
+  }
+  .tab-btn:hover { border-color: var(--accent); color: var(--text); }
+  .tab-btn.active { background: var(--accent); color: #0a0e1a; border-color: var(--accent); }
+
+  /* ─── BUG TABLE ─── */
+  .table-wrap { overflow-x: auto; border-radius: 14px; border: 1px solid var(--border); margin-bottom: 40px; }
+  table { width: 100%; border-collapse: collapse; min-width: 900px; }
+  thead { background: var(--surface2); }
+  thead th {
+    padding: 14px 16px; text-align: left; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 1.2px; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.2s; }
+  tbody tr:hover { background: rgba(0,212,255,0.04); }
+  tbody td { padding: 14px 16px; font-size: 13px; color: var(--text); vertical-align: top; }
+  tbody td:first-child { font-family: 'JetBrains Mono', monospace; color: var(--accent); font-size: 12px; font-weight: 600; }
+
+  .badge {
+    display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    font-weight: 600; padding: 3px 10px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .badge.critical { background: rgba(239,68,68,0.15); color: var(--critical); border: 1px solid rgba(239,68,68,0.3); }
+  .badge.high { background: rgba(249,115,22,0.15); color: var(--high); border: 1px solid rgba(249,115,22,0.3); }
+  .badge.medium { background: rgba(234,179,8,0.15); color: var(--medium); border: 1px solid rgba(234,179,8,0.3); }
+  .badge.low { background: rgba(34,197,94,0.15); color: var(--low); border: 1px solid rgba(34,197,94,0.3); }
+  .badge.pass { background: rgba(34,197,94,0.15); color: var(--pass); border: 1px solid rgba(34,197,94,0.3); }
+  .badge.fail { background: rgba(239,68,68,0.15); color: var(--fail); border: 1px solid rgba(239,68,68,0.3); }
+  .badge.covered { background: rgba(34,197,94,0.15); color: var(--pass); border: 1px solid rgba(34,197,94,0.3); }
+  .badge.partial { background: rgba(234,179,8,0.15); color: var(--medium); border: 1px solid rgba(234,179,8,0.3); }
+  .badge.failed { background: rgba(239,68,68,0.15); color: var(--fail); border: 1px solid rgba(239,68,68,0.3); }
+
+  /* ─── TABBED CONTENT ─── */
+  .tab-content { display: none; }
+  .tab-content.active { display: block; animation: fadeIn 0.35s ease; }
+
+  /* ─── STACK / TOOLS ─── */
+  .stack-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+  .stack-item {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 16px; font-size: 13px; display: flex; align-items: center; gap: 8px;
+    transition: border-color 0.3s;
+  }
+  .stack-item:hover { border-color: var(--accent2); }
+  .stack-item .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* ─── STRUCTURE TREE ─── */
+  .tree { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text-muted); line-height: 2; }
+  .tree .folder { color: var(--accent); }
+  .tree .file { color: var(--accent2); }
+  .tree .comment { color: var(--text-muted); font-size: 11px; }
+
+  /* ─── FOOTER ─── */
+  .footer {
+    text-align: center; padding: 40px 0 20px; color: var(--text-muted); font-size: 12px;
+    border-top: 1px solid var(--border); margin-top: 20px;
+  }
+  .footer a { color: var(--accent); text-decoration: none; }
+
+  /* ─── FILTER ROW ─── */
+  .filter-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  .filter-row label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-right: 4px; }
+
+  /* ─── ANIMATIONS ─── */
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ─── RESPONSIVE ─── */
+  @media (max-width: 640px) {
+    .container { padding: 0 12px 40px; }
+    .header { padding: 40px 0 24px; }
+    .summary-row { grid-template-columns: repeat(2, 1fr); }
+    table { min-width: 700px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="glow-orb one"></div>
+<div class="glow-orb two"></div>
+
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-badge">BugAThon 2024 — Live Dashboard</div>
+    <h1>HyreNet Bug Report</h1>
+    <p>Automated Selenium test suite covering Assessment Questions, Test Templates, Test Creation & Scheduling — 12 bugs identified and documented.</p>
+  </div>
+
+  <!-- SUMMARY CARDS -->
+  <div class="summary-row">
+    <div class="summary-card" style="animation-delay:0.1s"><div class="num total">12</div><div class="label">Total Bugs</div></div>
+    <div class="summary-card" style="animation-delay:0.15s"><div class="num critical">3</div><div class="label">Critical</div></div>
+    <div class="summary-card" style="animation-delay:0.2s"><div class="num high">4</div><div class="label">High</div></div>
+    <div class="summary-card" style="animation-delay:0.25s"><div class="num medium">4</div><div class="label">Medium</div></div>
+    <div class="summary-card" style="animation-delay:0.3s"><div class="num low">1</div><div class="label">Low</div></div>
+    <div class="summary-card" style="animation-delay:0.35s"><div class="num scenarios">16</div><div class="label">Test Scenarios</div></div>
+    <div class="summary-card" style="animation-delay:0.4s"><div class="num testcases">13</div><div class="label">Test Cases</div></div>
+    <div class="summary-card" style="animation-delay:0.45s"><div class="num pass-rate">31%</div><div class="label">Pass Rate</div></div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('bugs')">🐛 Bug Report</button>
+    <button class="tab-btn" onclick="switchTab('scenarios')">📋 Test Scenarios</button>
+    <button class="tab-btn" onclick="switchTab('testcases')">✅ Test Cases</button>
+    <button class="tab-btn" onclick="switchTab('rtm')">🔗 RTM</button>
+    <button class="tab-btn" onclick="switchTab('stack')">🛠️ Tech Stack</button>
+  </div>
+
+  <!-- ════ TAB: BUG REPORT ════ -->
+  <div id="tab-bugs" class="tab-content active">
+    <div class="section-title"><span class="icon">🐛</span> Bug Report <span class="tag">12 bugs found</span></div>
+    <div class="filter-row">
+      <label>Filter:</label>
+      <button class="tab-btn active" onclick="filterBugs('all', this)">All</button>
+      <button class="tab-btn" onclick="filterBugs('Critical', this)">Critical</button>
+      <button class="tab-btn" onclick="filterBugs('High', this)">High</button>
+      <button class="tab-btn" onclick="filterBugs('Medium', this)">Medium</button>
+      <button class="tab-btn" onclick="filterBugs('Low', this)">Low</button>
+    </div>
+    <div class="table-wrap">
+      <table id="bug-table">
+        <thead>
+          <tr>
+            <th>Bug ID</th><th>Module</th><th>Title</th><th>Severity</th>
+            <th>Expected</th><th>Actual (Bug)</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="bug-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ════ TAB: TEST SCENARIOS ════ -->
+  <div id="tab-scenarios" class="tab-content">
+    <div class="section-title"><span class="icon">📋</span> Test Scenarios <span class="tag">16 scenarios</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>Module</th><th>Scenario</th><th>Type</th><th>Priority</th><th>Bug Link</th></tr></thead>
+        <tbody id="scenario-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ════ TAB: TEST CASES ════ -->
+  <div id="tab-testcases" class="tab-content">
+    <div class="section-title"><span class="icon">✅</span> Test Cases <span class="tag">13 cases</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>TC ID</th><th>Scenario</th><th>Module</th><th>Title</th><th>Status</th></tr></thead>
+        <tbody id="tc-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ════ TAB: RTM ════ -->
+  <div id="tab-rtm" class="tab-content">
+    <div class="section-title"><span class="icon">🔗</span> Requirement Traceability Matrix <span class="tag">15 requirements</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Req ID</th><th>Requirement</th><th>Module</th><th>Scenarios</th><th>Test Cases</th><th>Bug IDs</th><th>Coverage</th></tr></thead>
+        <tbody id="rtm-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ════ TAB: TECH STACK ════ -->
+  <div id="tab-stack" class="tab-content">
+    <div class="section-title"><span class="icon">🛠️</span> Technology Stack & Project Structure</div>
+    <div class="stack-row">
+      <div class="stack-item"><span class="dot" style="background:#3572A5"></span> Python 3.11</div>
+      <div class="stack-item"><span class="dot" style="background:#00acd7"></span> Selenium 4</div>
+      <div class="stack-item"><span class="dot" style="background:#f7df1e"></span> pytest</div>
+      <div class="stack-item"><span class="dot" style="background:#ff6600"></span> pytest-html</div>
+      <div class="stack-item"><span class="dot" style="background:#d73a49"></span> Jenkins CI</div>
+      <div class="stack-item"><span class="dot" style="background:#70ad47"></span> Page Object Model</div>
+      <div class="stack-item"><span class="dot" style="background:#a78bfa"></span> openpyxl</div>
+      <div class="stack-item"><span class="dot" style="background:#00d4ff"></span> webdriver-manager</div>
+    </div>
+    <br/>
+    <div class="section-title" style="font-size:16px"><span class="icon">📂</span> Project Structure</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px 28px;margin-top:12px;">
+      <div class="tree">
+        <span class="folder">📁 hyrenet-bugathon/</span><br/>
+        <span style="color:var(--text-muted)">│</span><br/>
+        <span style="color:var(--text-muted)">├── </span><span class="file">conftest.py</span> <span class="comment">— fixtures & driver setup</span><br/>
+        <span style="color:var(--text-muted)">├── </span><span class="file">pytest.ini</span> <span class="comment">— test config & markers</span><br/>
+        <span style="color:var(--text-muted)">├── </span><span class="file">requirements.txt</span><br/>
+        <span style="color:var(--text-muted)">├── </span><span class="file">Jenkinsfile</span> <span class="comment">— CI/CD pipeline</span><br/>
+        <span style="color:var(--text-muted)">├── </span><span class="file">generate_excel.py</span> <span class="comment">— bug report Excel</span><br/>
+        <span style="color:var(--text-muted)">├── </span><span class="folder">📁 pages/</span><br/>
+        <span style="color:var(--text-muted)">│   ├── </span><span class="file">base_page.py</span><br/>
+        <span style="color:var(--text-muted)">│   ├── </span><span class="file">login_page.py</span><br/>
+        <span style="color:var(--text-muted)">│   ├── </span><span class="file">questions_page.py</span><br/>
+        <span style="color:var(--text-muted)">│   ├── </span><span class="file">templates_page.py</span><br/>
+        <span style="color:var(--text-muted)">│   └── </span><span class="file">test_creation_page.py</span><br/>
+        <span style="color:var(--text-muted)">└── </span><span class="folder">📁 tests/</span><br/>
+        <span style="color:var(--text-muted)">    ├── </span><span class="file">test_questions.py</span> <span class="comment">— BUG-001, 005, 009</span><br/>
+        <span style="color:var(--text-muted)">    ├── </span><span class="file">test_templates.py</span> <span class="comment">— BUG-002, 006, 012</span><br/>
+        <span style="color:var(--text-muted)">    ├── </span><span class="file">test_creation.py</span> <span class="comment">— BUG-003, 007, 010</span><br/>
+        <span style="color:var(--text-muted)">    └── </span><span class="file">test_scheduling.py</span> <span class="comment">— BUG-004, 008, 011</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    HyreNet BugAThon — Automated Testing Project &nbsp;|&nbsp; 12 Bugs &nbsp;|&nbsp; 16 Scenarios &nbsp;|&nbsp; 13 Test Cases &nbsp;|&nbsp; Full RTM Coverage
+  </div>
+</div>
+
+<script>
+// ─── DATA ───
+const bugs = [
+  {id:"BUG-001",module:"Assessment Questions",title:"Duplicate question saved without warning",sev:"High",expected:"Warning shown before saving duplicate",actual:"Both questions saved silently with no warning"},
+  {id:"BUG-002",module:"Test Templates",title:"Question count not updating in real-time",sev:"Medium",expected:"Count updates immediately after add/remove",actual:"Count remains stale until manual page refresh"},
+  {id:"BUG-003",module:"Test Creation",title:"Empty test name accepted on creation",sev:"High",expected:"Validation error: 'Test name is required'",actual:"Test with empty name created and saved"},
+  {id:"BUG-004",module:"Schedule Tests",title:"Date picker allows past dates",sev:"Critical",expected:"Past dates grayed out / unselectable",actual:"Past dates selectable; test scheduled in past"},
+  {id:"BUG-005",module:"Assessment Questions",title:"Special characters break question display",sev:"High",expected:"<html> tag displayed with proper escaping",actual:"HTML tags stripped; title shows incomplete text"},
+  {id:"BUG-006",module:"Test Templates",title:"Deleting template doesn't remove linked tests",sev:"Critical",expected:"Warning shown or deletion prevented",actual:"Template deleted; linked tests show broken refs"},
+  {id:"BUG-007",module:"Test Creation",title:"Character limit not enforced on description",sev:"Medium",expected:"Max char limit with counter/validation",actual:"5000+ chars accepted; dashboard layout breaks"},
+  {id:"BUG-008",module:"Schedule Tests",title:"Timezone not displayed during scheduling",sev:"Medium",expected:"Timezone label shown (e.g., 'IST')",actual:"No timezone info; causes scheduling confusion"},
+  {id:"BUG-009",module:"Assessment Questions",title:"Editing question loses answer options",sev:"Critical",expected:"All MCQ options pre-filled on edit",actual:"Option fields blank; must re-enter all options"},
+  {id:"BUG-010",module:"Test Creation",title:"Test type dropdown resets on validation error",sev:"Low",expected:"Dropdown retains selected value",actual:"Dropdown resets to default after error"},
+  {id:"BUG-011",module:"Schedule Tests",title:"Duplicate scheduling allowed for same candidate",sev:"High",expected:"Warning: 'Already scheduled for this candidate'",actual:"Duplicate entry created; multiple invites sent"},
+  {id:"BUG-012",module:"Test Templates",title:"Template name silently truncated",sev:"Medium",expected:"Character limit warning shown",actual:"Name truncated with no user notification"},
+];
+
+const scenarios = [
+  {id:"TS-001",module:"Assessment Questions",title:"Create a valid assessment question",type:"Positive",pri:"P1",bug:"—"},
+  {id:"TS-002",module:"Assessment Questions",title:"Detect duplicate questions on creation",type:"Negative",pri:"P1",bug:"BUG-001"},
+  {id:"TS-003",module:"Assessment Questions",title:"Handle special characters in questions",type:"Negative",pri:"P1",bug:"BUG-005"},
+  {id:"TS-004",module:"Assessment Questions",title:"Edit question retains all data",type:"Positive",pri:"P1",bug:"BUG-009"},
+  {id:"TS-005",module:"Test Templates",title:"Create template with multiple questions",type:"Positive",pri:"P1",bug:"—"},
+  {id:"TS-006",module:"Test Templates",title:"Template question count updates in real-time",type:"Positive",pri:"P2",bug:"BUG-002"},
+  {id:"TS-007",module:"Test Templates",title:"Delete template with dependent tests",type:"Negative",pri:"P1",bug:"BUG-006"},
+  {id:"TS-008",module:"Test Templates",title:"Template name character limit validation",type:"Negative",pri:"P2",bug:"BUG-012"},
+  {id:"TS-009",module:"Test Creation",title:"Create test with all required fields",type:"Positive",pri:"P1",bug:"—"},
+  {id:"TS-010",module:"Test Creation",title:"Validate empty test name is rejected",type:"Negative",pri:"P1",bug:"BUG-003"},
+  {id:"TS-011",module:"Test Creation",title:"Description field character limit enforcement",type:"Negative",pri:"P2",bug:"BUG-007"},
+  {id:"TS-012",module:"Test Creation",title:"Form state preserved after validation error",type:"Negative",pri:"P3",bug:"BUG-010"},
+  {id:"TS-013",module:"Schedule Tests",title:"Schedule test for valid future date",type:"Positive",pri:"P1",bug:"—"},
+  {id:"TS-014",module:"Schedule Tests",title:"Prevent scheduling on past dates",type:"Negative",pri:"P1",bug:"BUG-004"},
+  {id:"TS-015",module:"Schedule Tests",title:"Timezone displayed during scheduling",type:"Positive",pri:"P2",bug:"BUG-008"},
+  {id:"TS-016",module:"Schedule Tests",title:"Prevent duplicate scheduling for same candidate",type:"Negative",pri:"P1",bug:"BUG-011"},
+];
+
+const testCases = [
+  {id:"TC-001",sc:"TS-001",module:"Assessment Questions",title:"Successfully create a simple question",status:"PASS"},
+  {id:"TC-002",sc:"TS-002",module:"Assessment Questions",title:"Attempt to create duplicate question",status:"FAIL"},
+  {id:"TC-003",sc:"TS-003",module:"Assessment Questions",title:"Create question with HTML special characters",status:"FAIL"},
+  {id:"TC-004",sc:"TS-004",module:"Assessment Questions",title:"Edit MCQ and verify options retained",status:"FAIL"},
+  {id:"TC-005",sc:"TS-005",module:"Test Templates",title:"Create template and add questions",status:"PASS"},
+  {id:"TC-006",sc:"TS-006",module:"Test Templates",title:"Verify question count updates after removal",status:"FAIL"},
+  {id:"TC-007",sc:"TS-007",module:"Test Templates",title:"Delete template linked to existing test",status:"FAIL"},
+  {id:"TC-008",sc:"TS-009",module:"Test Creation",title:"Create test with all valid fields filled",status:"PASS"},
+  {id:"TC-009",sc:"TS-010",module:"Test Creation",title:"Submit creation with empty name",status:"FAIL"},
+  {id:"TC-010",sc:"TS-011",module:"Test Creation",title:"Enter extremely long description",status:"FAIL"},
+  {id:"TC-011",sc:"TS-013",module:"Schedule Tests",title:"Schedule test for valid future date",status:"PASS"},
+  {id:"TC-012",sc:"TS-014",module:"Schedule Tests",title:"Attempt to schedule for past date",status:"FAIL"},
+  {id:"TC-013",sc:"TS-016",module:"Schedule Tests",title:"Schedule same test for same candidate twice",status:"FAIL"},
+];
+
+const rtm = [
+  {req:"REQ-001",desc:"Allow creation of assessment questions",module:"Assessment Questions",sc:"TS-001",tc:"TC-001",bug:"—",cov:"Covered"},
+  {req:"REQ-002",desc:"Prevent duplicate questions",module:"Assessment Questions",sc:"TS-002",tc:"TC-002",bug:"BUG-001",cov:"Failed"},
+  {req:"REQ-003",desc:"Sanitize special characters in text fields",module:"Assessment Questions",sc:"TS-003",tc:"TC-003",bug:"BUG-005",cov:"Failed"},
+  {req:"REQ-004",desc:"Retain all question data on edit",module:"Assessment Questions",sc:"TS-004",tc:"TC-004",bug:"BUG-009",cov:"Failed"},
+  {req:"REQ-005",desc:"Allow creation of test templates",module:"Test Templates",sc:"TS-005",tc:"TC-005",bug:"—",cov:"Covered"},
+  {req:"REQ-006",desc:"Update question count in real-time",module:"Test Templates",sc:"TS-006",tc:"TC-006",bug:"BUG-002",cov:"Failed"},
+  {req:"REQ-007",desc:"Handle template deletion with dependencies",module:"Test Templates",sc:"TS-007",tc:"TC-007",bug:"BUG-006",cov:"Failed"},
+  {req:"REQ-008",desc:"Enforce template name character limit",module:"Test Templates",sc:"TS-008",tc:"—",bug:"BUG-012",cov:"Partial"},
+  {req:"REQ-009",desc:"Allow test creation with required fields",module:"Test Creation",sc:"TS-009",tc:"TC-008",bug:"—",cov:"Covered"},
+  {req:"REQ-010",desc:"Validate test name is not empty",module:"Test Creation",sc:"TS-010",tc:"TC-009",bug:"BUG-003",cov:"Failed"},
+  {req:"REQ-011",desc:"Enforce description character limit",module:"Test Creation",sc:"TS-011",tc:"TC-010",bug:"BUG-007",cov:"Failed"},
+  {req:"REQ-012",desc:"Preserve form values after validation error",module:"Test Creation",sc:"TS-012",tc:"—",bug:"BUG-010",cov:"Partial"},
+  {req:"REQ-013",desc:"Schedule tests for future dates only",module:"Schedule Tests",sc:"TS-013, TS-014",tc:"TC-011, TC-012",bug:"BUG-004",cov:"Failed"},
+  {req:"REQ-014",desc:"Display timezone during scheduling",module:"Schedule Tests",sc:"TS-015",tc:"—",bug:"BUG-008",cov:"Partial"},
+  {req:"REQ-015",desc:"Prevent duplicate test scheduling",module:"Schedule Tests",sc:"TS-016",tc:"TC-013",bug:"BUG-011",cov:"Failed"},
+];
+
+// ─── RENDERERS ───
+function renderBugs(filter = 'all') {
+  const tbody = document.getElementById('bug-body');
+  const data = filter === 'all' ? bugs : bugs.filter(b => b.sev === filter);
+  tbody.innerHTML = data.map(b => `
+    <tr>
+      <td>${b.id}</td>
+      <td>${b.module}</td>
+      <td>${b.title}</td>
+      <td><span class="badge ${b.sev.toLowerCase()}">${b.sev}</span></td>
+      <td style="color:var(--text-muted)">${b.expected}</td>
+      <td style="color:var(--fail)">${b.actual}</td>
+      <td><span class="badge fail">Open</span></td>
+    </tr>
+  `).join('');
+}
+
+function renderScenarios() {
+  document.getElementById('scenario-body').innerHTML = scenarios.map(s => `
+    <tr>
+      <td>${s.id}</td>
+      <td>${s.module}</td>
+      <td>${s.title}</td>
+      <td style="color:${s.type==='Positive'?'var(--pass)':'var(--high)'}">${s.type}</td>
+      <td>${s.pri}</td>
+      <td style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:12px">${s.bug}</td>
+    </tr>
+  `).join('');
+}
+
+function renderTestCases() {
+  document.getElementById('tc-body').innerHTML = testCases.map(t => `
+    <tr>
+      <td>${t.id}</td>
+      <td style="color:var(--accent2);font-family:'JetBrains Mono',monospace;font-size:12px">${t.sc}</td>
+      <td>${t.module}</td>
+      <td>${t.title}</td>
+      <td><span class="badge ${t.status.toLowerCase()}">${t.status}</span></td>
+    </tr>
+  `).join('');
+}
+
+function renderRTM() {
+  document.getElementById('rtm-body').innerHTML = rtm.map(r => `
+    <tr>
+      <td>${r.req}</td>
+      <td>${r.desc}</td>
+      <td>${r.module}</td>
+      <td style="color:var(--accent2);font-family:'JetBrains Mono',monospace;font-size:11px">${r.sc}</td>
+      <td style="color:var(--accent2);font-family:'JetBrains Mono',monospace;font-size:11px">${r.tc}</td>
+      <td style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:11px">${r.bug}</td>
+      <td><span class="badge ${r.cov.toLowerCase()}">${r.cov}</span></td>
+    </tr>
+  `).join('');
+}
+
+// ─── TAB SWITCHING ───
+function switchTab(tab) {
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.tabs .tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ─── BUG FILTER ───
+function filterBugs(sev, btn) {
+  document.querySelectorAll('.filter-row .tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderBugs(sev);
+}
+
+// ─── INIT ───
+renderBugs();
+renderScenarios();
+renderTestCases();
+renderRTM();
+</script>
+</body>
+</html>
